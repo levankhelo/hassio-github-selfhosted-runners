@@ -1,5 +1,5 @@
 {
-  "name" : "levankhelo: github actions",
+  "name" : "Levankhelo: Self Hosted Runner for GitHub Actions",
   "url" : "https://github.com/levankhelo/hassio-github-selfhosted-runners.git",
   "maintainer" : "Levan Khelashvili <levankhelo@gmail.com>"
 }
