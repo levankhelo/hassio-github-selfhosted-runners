@@ -9,8 +9,8 @@
 # ---------------------------------------------------------------------------
 
 PERSISTENT_DATA_DIR="/data"
-RUNNER_DIR="${PERSISTENT_DATA_DIR}/runner"
-LEGACY_RUNNER_DIR="/home/runner"
+PERSISTENT_RUNNER_DIR="${PERSISTENT_DATA_DIR}/runner"
+RUNNER_DIR="/home/runner"
 RUNNER_VERSION="2.322.0"
 
 # ---------------------------------------------------------------------------
@@ -51,13 +51,13 @@ bashio::log.info "Detected architecture: ${MACHINE} → runner arch: ${RUNNER_AR
 # ---------------------------------------------------------------------------
 # Prepare persistent runner storage
 # ---------------------------------------------------------------------------
-if ! mkdir -p "${RUNNER_DIR}"; then
-    bashio::log.fatal "Cannot create persistent runner directory at ${RUNNER_DIR}."
+if ! mkdir -p "${PERSISTENT_RUNNER_DIR}"; then
+    bashio::log.fatal "Cannot create persistent runner directory at ${PERSISTENT_RUNNER_DIR}."
     exit 1
 fi
 
-if [ ! -w "${RUNNER_DIR}" ]; then
-    bashio::log.fatal "Persistent runner directory ${RUNNER_DIR} is not writable."
+if [ ! -w "${PERSISTENT_RUNNER_DIR}" ]; then
+    bashio::log.fatal "Persistent runner directory ${PERSISTENT_RUNNER_DIR} is not writable."
     exit 1
 fi
 
@@ -67,18 +67,37 @@ else
     bashio::log.warning "${PERSISTENT_DATA_DIR} is available but not reported as a separate mountpoint."
 fi
 
-bashio::log.info "Using persistent runner directory: ${RUNNER_DIR}"
-
-if [ ! -f "${RUNNER_DIR}/config.sh" ] && [ -f "${LEGACY_RUNNER_DIR}/config.sh" ]; then
-    bashio::log.info "Migrating existing runner installation from ${LEGACY_RUNNER_DIR} to ${RUNNER_DIR}…"
-    cp -a "${LEGACY_RUNNER_DIR}/." "${RUNNER_DIR}/" \
-        || { bashio::log.fatal "Failed to migrate runner data to persistent storage."; exit 1; }
+if [ -L "${RUNNER_DIR}" ]; then
+    CURRENT_LINK_TARGET=$(readlink "${RUNNER_DIR}")
+    if [ "${CURRENT_LINK_TARGET}" != "${PERSISTENT_RUNNER_DIR}" ]; then
+        rm -f "${RUNNER_DIR}" \
+            || { bashio::log.fatal "Failed to remove unexpected runner symlink at ${RUNNER_DIR}."; exit 1; }
+    fi
+elif [ -d "${RUNNER_DIR}" ]; then
+    if [ -n "$(ls -A "${RUNNER_DIR}" 2>/dev/null)" ] && [ ! -f "${PERSISTENT_RUNNER_DIR}/config.sh" ]; then
+        bashio::log.info "Migrating existing runner installation from ${RUNNER_DIR} to ${PERSISTENT_RUNNER_DIR}…"
+        cp -a "${RUNNER_DIR}/." "${PERSISTENT_RUNNER_DIR}/" \
+            || { bashio::log.fatal "Failed to migrate runner data to persistent storage."; exit 1; }
+    fi
+    rm -rf "${RUNNER_DIR}" \
+        || { bashio::log.fatal "Failed to replace ${RUNNER_DIR} with persistent storage."; exit 1; }
+elif [ -e "${RUNNER_DIR}" ]; then
+    rm -rf "${RUNNER_DIR}" \
+        || { bashio::log.fatal "Failed to clear unexpected path at ${RUNNER_DIR}."; exit 1; }
 fi
 
-if [ -f "${RUNNER_DIR}/.runner" ] && [ -f "${RUNNER_DIR}/.credentials" ]; then
-    bashio::log.info "Persisted runner state found in ${RUNNER_DIR}."
+if [ ! -L "${RUNNER_DIR}" ]; then
+    ln -s "${PERSISTENT_RUNNER_DIR}" "${RUNNER_DIR}" \
+        || { bashio::log.fatal "Failed to link ${RUNNER_DIR} to ${PERSISTENT_RUNNER_DIR}."; exit 1; }
+fi
+
+bashio::log.info "Using persistent runner directory: ${PERSISTENT_RUNNER_DIR}"
+bashio::log.info "Active runner path: ${RUNNER_DIR} -> ${PERSISTENT_RUNNER_DIR}"
+
+if [ -f "${PERSISTENT_RUNNER_DIR}/.runner" ] && [ -f "${PERSISTENT_RUNNER_DIR}/.credentials" ]; then
+    bashio::log.info "Persisted runner state found in ${PERSISTENT_RUNNER_DIR}."
 else
-    bashio::log.info "No persisted runner state found in ${RUNNER_DIR}; initial registration may be required."
+    bashio::log.info "No persisted runner state found in ${PERSISTENT_RUNNER_DIR}; initial registration may be required."
 fi
 
 # ---------------------------------------------------------------------------

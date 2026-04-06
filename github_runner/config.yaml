@@ -1,6 +1,6 @@
 name: "GitHub Self-Hosted Runner"
 description: "Run a GitHub Actions self-hosted runner as a Home Assistant add-on"
-version: "1.0.5"
+version: "1.0.6"
 slug: "github_runner"
 init: false
 arch:
@@ -8,6 +8,9 @@ arch:
   - amd64
   - armhf
   - armv7
+map:
+  - type: data
+    path: /data
 options:
   repo_url: ""
   runner_token: ""
