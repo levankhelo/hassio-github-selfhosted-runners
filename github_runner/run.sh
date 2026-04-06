@@ -30,11 +30,6 @@ if bashio::var.is_empty "${REPO_URL}"; then
     exit 1
 fi
 
-if bashio::var.is_empty "${RUNNER_TOKEN}"; then
-    bashio::log.fatal "Option 'runner_token' must not be empty. Please generate a registration token from GitHub and set it here."
-    exit 1
-fi
-
 # ---------------------------------------------------------------------------
 # Determine the runner architecture
 # ---------------------------------------------------------------------------
@@ -107,26 +102,51 @@ fi
 # ---------------------------------------------------------------------------
 cd "${RUNNER_DIR}" || { bashio::log.fatal "Cannot change to runner directory ${RUNNER_DIR}"; exit 1; }
 
-CONFIG_ARGS=(
-    "--url"        "${REPO_URL}"
-    "--token"      "${RUNNER_TOKEN}"
-    "--name"       "${RUNNER_NAME}"
-    "--labels"     "${LABELS}"
-    "--work"       "${WORK_DIR}"
-    "--unattended"
-)
+RUNNER_STATE_FILE="${RUNNER_DIR}/.runner"
+RUNNER_CREDENTIALS_FILE="${RUNNER_DIR}/.credentials"
+RUNNER_ALREADY_CONFIGURED=false
 
-if bashio::var.true "${REPLACE_EXISTING}"; then
-    CONFIG_ARGS+=("--replace")
+if [ -f "${RUNNER_STATE_FILE}" ] && [ -f "${RUNNER_CREDENTIALS_FILE}" ]; then
+    EXISTING_URL=$(jq -r '.gitHubUrl // empty' "${RUNNER_STATE_FILE}" 2>/dev/null || true)
+    EXISTING_NAME=$(jq -r '.agentName // empty' "${RUNNER_STATE_FILE}" 2>/dev/null || true)
+
+    if [ "${EXISTING_URL}" = "${REPO_URL}" ] && [ "${EXISTING_NAME}" = "${RUNNER_NAME}" ]; then
+        RUNNER_ALREADY_CONFIGURED=true
+        bashio::log.info "Existing runner configuration detected for '${RUNNER_NAME}' on ${REPO_URL}; skipping registration."
+    else
+        bashio::log.warning "Runner state already exists, but it targets '${EXISTING_URL}' with name '${EXISTING_NAME}'."
+        bashio::log.fatal "Refusing to re-register over existing runner state automatically. Remove the persisted runner state or align repo_url and runner_name with the existing registration."
+        exit 1
+    fi
 fi
 
-if ! bashio::var.is_empty "${RUNNER_GROUP}"; then
-    CONFIG_ARGS+=("--runnergroup" "${RUNNER_GROUP}")
-fi
+if ! bashio::var.true "${RUNNER_ALREADY_CONFIGURED}"; then
+    if bashio::var.is_empty "${RUNNER_TOKEN}"; then
+        bashio::log.fatal "Option 'runner_token' must not be empty when the runner is not already configured."
+        exit 1
+    fi
 
-bashio::log.info "Configuring GitHub Actions runner for ${REPO_URL}…"
-./config.sh "${CONFIG_ARGS[@]}" \
-    || { bashio::log.fatal "Runner configuration failed. Check your repo_url and runner_token."; exit 1; }
+    CONFIG_ARGS=(
+        "--url"        "${REPO_URL}"
+        "--token"      "${RUNNER_TOKEN}"
+        "--name"       "${RUNNER_NAME}"
+        "--labels"     "${LABELS}"
+        "--work"       "${WORK_DIR}"
+        "--unattended"
+    )
+
+    if bashio::var.true "${REPLACE_EXISTING}"; then
+        CONFIG_ARGS+=("--replace")
+    fi
+
+    if ! bashio::var.is_empty "${RUNNER_GROUP}"; then
+        CONFIG_ARGS+=("--runnergroup" "${RUNNER_GROUP}")
+    fi
+
+    bashio::log.info "Configuring GitHub Actions runner for ${REPO_URL}…"
+    ./config.sh "${CONFIG_ARGS[@]}" \
+        || { bashio::log.fatal "Runner configuration failed. Check your repo_url and runner_token."; exit 1; }
+fi
 
 # ---------------------------------------------------------------------------
 # Start the runner
