@@ -1,6 +1,6 @@
 name: "GitHub Self-Hosted Runner"
 description: "Run a GitHub Actions self-hosted runner as a Home Assistant add-on"
-version: "1.0.4"
+version: "1.0.5"
 slug: "github_runner"
 init: false
 arch:

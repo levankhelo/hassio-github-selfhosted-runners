@@ -8,7 +8,9 @@
 # foreground so the Supervisor can track its lifecycle.
 # ---------------------------------------------------------------------------
 
-RUNNER_DIR="/home/runner"
+PERSISTENT_DATA_DIR="/data"
+RUNNER_DIR="${PERSISTENT_DATA_DIR}/runner"
+LEGACY_RUNNER_DIR="/home/runner"
 RUNNER_VERSION="2.322.0"
 
 # ---------------------------------------------------------------------------
@@ -45,6 +47,39 @@ case "${MACHINE}" in
 esac
 
 bashio::log.info "Detected architecture: ${MACHINE} → runner arch: ${RUNNER_ARCH}"
+
+# ---------------------------------------------------------------------------
+# Prepare persistent runner storage
+# ---------------------------------------------------------------------------
+if ! mkdir -p "${RUNNER_DIR}"; then
+    bashio::log.fatal "Cannot create persistent runner directory at ${RUNNER_DIR}."
+    exit 1
+fi
+
+if [ ! -w "${RUNNER_DIR}" ]; then
+    bashio::log.fatal "Persistent runner directory ${RUNNER_DIR} is not writable."
+    exit 1
+fi
+
+if mountpoint -q "${PERSISTENT_DATA_DIR}" 2>/dev/null; then
+    bashio::log.info "Persistent storage is mounted at ${PERSISTENT_DATA_DIR}."
+else
+    bashio::log.warning "${PERSISTENT_DATA_DIR} is available but not reported as a separate mountpoint."
+fi
+
+bashio::log.info "Using persistent runner directory: ${RUNNER_DIR}"
+
+if [ ! -f "${RUNNER_DIR}/config.sh" ] && [ -f "${LEGACY_RUNNER_DIR}/config.sh" ]; then
+    bashio::log.info "Migrating existing runner installation from ${LEGACY_RUNNER_DIR} to ${RUNNER_DIR}…"
+    cp -a "${LEGACY_RUNNER_DIR}/." "${RUNNER_DIR}/" \
+        || { bashio::log.fatal "Failed to migrate runner data to persistent storage."; exit 1; }
+fi
+
+if [ -f "${RUNNER_DIR}/.runner" ] && [ -f "${RUNNER_DIR}/.credentials" ]; then
+    bashio::log.info "Persisted runner state found in ${RUNNER_DIR}."
+else
+    bashio::log.info "No persisted runner state found in ${RUNNER_DIR}; initial registration may be required."
+fi
 
 # ---------------------------------------------------------------------------
 # Install user-defined packages
