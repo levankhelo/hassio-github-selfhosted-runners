@@ -55,33 +55,31 @@ bashio::log.info "Detected architecture: ${MACHINE} → runner arch: ${RUNNER_AR
 # Install user-defined packages
 # ---------------------------------------------------------------------------
 if bashio::config.exists 'packages'; then
-    bashio::log.info "Updating package lists…"
-    if ! apt-get update -qq 2>/dev/null; then
-        bashio::log.warning "apt-get update failed; package installation may not succeed."
-    fi
-
     PACKAGES_JSON=$(bashio::config 'packages')
-    JQ_ERR=$(mktemp)
-    PACKAGES_LIST=$(echo "${PACKAGES_JSON}" | jq -r '.[]' 2>"${JQ_ERR}")
-    if [ $? -ne 0 ]; then
-        bashio::log.warning "Could not parse packages list: $(cat "${JQ_ERR}")"
-        PACKAGES_LIST=""
-    fi
-    rm -f "${JQ_ERR}"
-
-    while IFS= read -r package; do
-        [[ -z "${package}" ]] && continue
-        if [[ ! "${package}" =~ ^[a-zA-Z0-9._+\-]+$ ]]; then
-            bashio::log.warning "Package name '${package}' contains invalid characters (skipping)."
-            continue
-        fi
-        bashio::log.info "Installing package '${package}'…"
-        if install_output=$(apt-get install -y --no-install-recommends "${package}" 2>&1); then
-            bashio::log.info "Package '${package}' installed successfully."
+    if echo "${PACKAGES_JSON}" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+        if ! command -v apt-get >/dev/null 2>&1; then
+            bashio::log.warning "Package installation was requested, but apt-get is not available in this image."
         else
-            bashio::log.warning "Package '${package}' could not be installed due to error (skipping): ${install_output}"
+            bashio::log.info "Updating package lists…"
+            if ! apt_update_output=$(apt-get update 2>&1); then
+                bashio::log.warning "apt-get update failed; skipping runtime package installation: ${apt_update_output}"
+            else
+                while IFS= read -r package; do
+                    [[ -z "${package}" ]] && continue
+                    if [[ ! "${package}" =~ ^[a-zA-Z0-9._+\-]+$ ]]; then
+                        bashio::log.warning "Package name '${package}' contains invalid characters (skipping)."
+                        continue
+                    fi
+                    bashio::log.info "Installing package '${package}'…"
+                    if install_output=$(apt-get install -y --no-install-recommends "${package}" 2>&1); then
+                        bashio::log.info "Package '${package}' installed successfully."
+                    else
+                        bashio::log.warning "Package '${package}' could not be installed due to error (skipping): ${install_output}"
+                    fi
+                done < <(echo "${PACKAGES_JSON}" | jq -r '.[]')
+            fi
         fi
-    done <<< "${PACKAGES_LIST}"
+    fi
 fi
 
 # ---------------------------------------------------------------------------

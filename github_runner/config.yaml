@@ -16,12 +16,7 @@ options:
   runner_group: "Default"
   work_dir: "_work"
   replace_existing: true
-  packages:
-    - curl
-    - wget
-    - git
-    - jq
-    - ca-certificates
+  packages: []
 schema:
   repo_url: str
   runner_token: str

@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         git \
         jq \
+        wget \
         libicu67 \
         libssl1.1 \
         ca-certificates \
