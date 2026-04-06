@@ -198,8 +198,17 @@ if ! bashio::var.true "${RUNNER_ALREADY_CONFIGURED}"; then
     fi
 
     bashio::log.info "Configuring GitHub Actions runner for ${REPO_URL}…"
-    ./config.sh "${CONFIG_ARGS[@]}" \
-        || { bashio::log.fatal "Runner configuration failed. Check your repo_url and runner_token."; exit 1; }
+    if ! config_output=$(./config.sh "${CONFIG_ARGS[@]}" 2>&1); then
+        while IFS= read -r line; do
+            [ -n "${line}" ] && bashio::log.error "${line}"
+        done <<< "${config_output}"
+        bashio::log.fatal "Runner configuration failed."
+        exit 1
+    fi
+
+    while IFS= read -r line; do
+        [ -n "${line}" ] && bashio::log.info "${line}"
+    done <<< "${config_output}"
 fi
 
 # ---------------------------------------------------------------------------
